@@ -1,65 +1,67 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.0.0/contracts/token/ERC20/ERC20.sol";
 
-contract DegenToken is ERC20, Ownable, ERC20Burnable {
-    constructor() ERC20("DegenToken", "DGN") Ownable(msg.sender) {}
+contract DegenToken1 is ERC20 {
 
-    // Enum for gaming achievements
-    enum Achievement { Novice, Apprentice, Journeyman, Expert, Master }
-
-    // Struct to store player achievement data
-    struct PlayerAchievement {
-        address player;
-        Achievement level;
-        uint256 points;
+    struct HolderInfo {
+        uint256 balance;
+        uint256 lastTransferTimestamp;
     }
-    // Mapping to track player achievements
-    mapping(address => PlayerAchievement) public playerAchievements;
-    // Function to award tokens for gameplay
-    function awardTokens(address player, uint256 amount) public onlyOwner {
-        _mint(player, amount);
-        // Update player achievement points
-        playerAchievements[player].points += amount;
-        // Update player achievement level if necessary
-        updateAchievementLevel(player);
+    mapping(address => HolderInfo) public holders;
+    uint256 public loyaltyRewardRate = 1; 
+
+    address public owner;
+
+    constructor() ERC20("DegenToken", "DGN") {
+        owner = msg.sender;
     }
-    // Function to update a player's achievement level
-    function updateAchievementLevel(address player) internal {
-        uint256 points = playerAchievements[player].points;
-        if (points >= 100 && points < 500) {
-            playerAchievements[player].level = Achievement.Novice;
-        } else if (points >= 500 && points < 1000) {
-            playerAchievements[player].level = Achievement.Apprentice;
-        } else if (points >= 1000 && points < 2000) {
-            playerAchievements[player].level = Achievement.Journeyman;
-        } else if (points >= 2000 && points < 5000) {
-            playerAchievements[player].level = Achievement.Expert;
-        } else if (points >= 5000) {
-            playerAchievements[player].level = Achievement.Master;
+
+    function mintToken(address to, uint256 amount) public {
+        _mint(to, amount);
+        updateHolderInfo(to, int256(amount));
+    }
+
+    function burnToken(uint256 amount) public {
+        _burn(msg.sender, amount);
+        updateHolderInfo(msg.sender, -int256(amount));
+    }
+
+    function _transfer(address sender, address recipient, uint256 amount) internal override {
+        super._transfer(sender, recipient, amount);
+        updateHolderInfo(sender, -int256(amount));
+        updateHolderInfo(recipient, int256(amount));
+    }
+
+    function redeem_Token(uint256 amount) public {
+        _burn(msg.sender, amount);
+        updateHolderInfo(msg.sender, -int256(amount));
+        // Add logic for redeeming in-game rewards here
+    }
+
+    function calculateLoyaltyRewards(address holder) public view returns (uint256) {
+        HolderInfo storage holderInfo = holders[holder];
+        uint256 holdingDuration = block.timestamp - holderInfo.lastTransferTimestamp;
+        uint256 dailyRewards = (holderInfo.balance * loyaltyRewardRate) / 100;
+        uint256 totalRewards = (dailyRewards * holdingDuration) / 1 days;
+        return totalRewards;
+    }
+
+    function claim_rewards() public {
+        uint256 rewards = calculateLoyaltyRewards(msg.sender);
+        require(rewards > 0, "No loyalty rewards available");
+        _mint(msg.sender, rewards);
+        holders[msg.sender].lastTransferTimestamp = block.timestamp;
+    }
+
+    function updateHolderInfo(address holder, int256 amountChange) internal {
+        HolderInfo storage holderInfo = holders[holder];
+        if (amountChange > 0) {
+            holderInfo.balance += uint256(amountChange);
+        } else {
+            holderInfo.balance -= uint256(-amountChange);
         }
-    }
-    // Function to transfer tokens to another player
-    function transferArcade(address _to, uint256 _amt) public {
-        require(_amt <= balanceOf(msg.sender), "Insufficient ARC");
-        _transfer(msg.sender, _to, _amt);
-    }
-    // Function to redeem tokens for arcade features
-    function redeemFeature(uint256 _amt) public {
-        require(_amt <= balanceOf(msg.sender), "Insufficient ARC");
-        // Add logic to redeem tokens for arcade features
-        _burn(msg.sender, _amt); // Burn the redeemed tokens
-    }
-    // Function to check the token balance of the caller
-    function checkBalance() public view returns (uint256) {
-        return balanceOf(msg.sender);
-    }
-    // Function to burn tokens
-    function burnArcade(uint256 _amt) public {
-        require(_amt <= balanceOf(msg.sender), "Insufficient ARC");
-        _burn(msg.sender, _amt);
+        holderInfo.lastTransferTimestamp = block.timestamp;
     }
 }
