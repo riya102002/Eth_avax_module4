@@ -1,6 +1,3 @@
-Sure! Here’s a README.md file for your `DegenCorporateToken` Solidity smart contract:
-
----
 
 # DegenCorporateToken
 
